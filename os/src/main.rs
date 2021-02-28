@@ -4,9 +4,13 @@
 #![feature(llvm_asm)]
 #![feature(panic_info_message)]
 
+// use console::ANSICON;
+use log::{debug, error, info, trace, warn};
+
 #[macro_use]
 mod console;
 mod lang_items;
+mod logger;
 mod sbi;
 
 global_asm!(include_str!("entry.asm"));
@@ -21,6 +25,7 @@ fn clear_bss() {
 
 #[no_mangle]
 pub fn rust_main() -> ! {
+    logger::init();
     extern "C" {
         fn stext();
         fn etext();
@@ -35,13 +40,18 @@ pub fn rust_main() -> ! {
     }
     clear_bss();
     println!("Hello, world!");
-    println!(".text [{:#x}, {:#x})", stext as usize, etext as usize);
-    println!(".rodata [{:#x}, {:#x})", srodata as usize, erodata as usize);
-    println!(".data [{:#x}, {:#x})", sdata as usize, edata as usize);
-    println!(
+    info!(".text [{:#x}, {:#x})", stext as usize, etext as usize);
+    info!(".rodata [{:#x}, {:#x})", srodata as usize, erodata as usize);
+    info!(".data [{:#x}, {:#x})", sdata as usize, edata as usize);
+    info!(
         "boot_stack [{:#x}, {:#x})",
         boot_stack as usize, boot_stack_top as usize
     );
-    println!(".bss [{:#x}, {:#x})", sbss as usize, ebss as usize);
+    info!(".bss [{:#x}, {:#x})", sbss as usize, ebss as usize);
+    info!("info test");
+    error!("error test");
+    warn!("warn test");
+    debug!("debug test");
+    trace!("trace test");
     panic!("Shutdown machine!");
 }
