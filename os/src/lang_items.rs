@@ -5,7 +5,7 @@ use core::panic::PanicInfo;
 fn panic(info: &PanicInfo) -> ! {
     if let Some(location) = info.location() {
         println_colorized!(
-            "Panicked at {}:{} {}",
+            "[kernel] Panicked at {}:{} {}",
             ANSICON::FgRed,
             ANSICON::BgDefault,
             location.file(),
@@ -14,7 +14,7 @@ fn panic(info: &PanicInfo) -> ! {
         );
     } else {
         println_colorized!(
-            "Panicked: {}",
+            "[kernel] Panicked: {}",
             ANSICON::FgRed,
             ANSICON::BgDefault,
             info.message().unwrap()
