@@ -27,7 +27,7 @@ impl log::Log for SimpleLogger {
             print_colorized(
                 format_args!("[{:>5}] : {}\n", record.level(), record.args()),
                 level_to_color(record.level()),
-                49 as u8,
+                ANSICON::BgDefault as u8,
             )
         }
     }
