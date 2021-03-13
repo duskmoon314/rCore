@@ -1,9 +1,9 @@
-use crate::trap::TrapContext;
+use crate::{logger, trap::TrapContext};
 use core::cell::RefCell;
 use lazy_static::*;
 
-const USER_STACK_SIZE: usize = 4096 * 2;
-const KERNEL_STACK_SIZE: usize = 4096 * 2;
+const USER_STACK_SIZE: usize = 4096;
+const KERNEL_STACK_SIZE: usize = 4096;
 const MAX_APP_NUM: usize = 16;
 const APP_BASE_ADDRESS: usize = 0x80400000;
 const APP_SIZE_LIMIT: usize = 0x20000;
@@ -56,9 +56,9 @@ unsafe impl Sync for AppManager {}
 
 impl AppManagerInner {
     pub fn print_app_info(&self) {
-        println!("[kernel] num_app = {}", self.num_app);
+        debug!("[kernel] num_app = {}", self.num_app);
         for i in 0..self.num_app {
-            println!(
+            debug!(
                 "[kernel] app_{} [{:#x}, {:#x})",
                 i,
                 self.app_start[i],
@@ -71,7 +71,7 @@ impl AppManagerInner {
         if app_id >= self.num_app {
             panic!("All applications completed!");
         }
-        println!("[kernel] Loading app_{}", app_id);
+        debug!("[kernel] Loading app_{}", app_id);
         // clear icache
         llvm_asm!("fence.i" :::: "volatile");
         // clear app area
@@ -92,6 +92,21 @@ impl AppManagerInner {
 
     pub fn move_to_next_app(&mut self) {
         self.current_app += 1;
+    }
+
+    pub fn check_read_memory(&self, buf: *const u8, len: usize) -> Result<(), i32> {
+        let min_mem_bound = APP_BASE_ADDRESS;
+        let max_mem_bound = APP_BASE_ADDRESS + APP_SIZE_LIMIT;
+        let max_stack_bound =
+            (USER_STACK.get_sp() + USER_STACK_SIZE - 1) & (!(USER_STACK_SIZE - 1));
+        let min_stack_bound = max_stack_bound - USER_STACK_SIZE;
+
+        if (min_mem_bound > buf as usize || max_mem_bound < buf as usize + len)
+            && (min_stack_bound > buf as usize || max_stack_bound < buf as usize + len)
+        {
+            return Err(-1);
+        }
+        Ok(())
     }
 }
 
@@ -117,11 +132,16 @@ lazy_static! {
 }
 
 pub fn init() {
+    logger::init();
     print_app_info();
 }
 
 pub fn print_app_info() {
     APP_MANAGER.inner.borrow().print_app_info();
+}
+
+pub fn check_read_memory(buf: *const u8, len: usize) -> Result<(), i32> {
+    APP_MANAGER.inner.borrow().check_read_memory(buf, len)
 }
 
 pub fn run_next_app() -> ! {

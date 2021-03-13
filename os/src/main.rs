@@ -6,8 +6,8 @@
 
 #[allow(unused_imports)]
 use console::ANSICON;
-#[allow(unused_imports)]
-use log::{debug, error, info, trace, warn};
+#[macro_use]
+extern crate log;
 
 #[macro_use]
 mod console;
@@ -33,7 +33,6 @@ fn clear_bss() {
 pub fn rust_main() -> ! {
     logger::init();
     clear_bss();
-    println!("[kernel] Hello, world!");
     trap::init();
     batch::init();
     batch::run_next_app();

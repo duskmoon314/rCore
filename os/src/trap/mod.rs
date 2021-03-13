@@ -8,6 +8,8 @@ use riscv::register::{
     stval, stvec,
 };
 
+use log::debug;
+
 global_asm!(include_str!("trap.S"));
 
 pub fn init() {
@@ -29,11 +31,11 @@ pub fn trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
             cx.x[10] = syscall(cx.x[17], [cx.x[10], cx.x[11], cx.x[12]]) as usize;
         }
         Trap::Exception(Exception::StoreFault) | Trap::Exception(Exception::StorePageFault) => {
-            println!("[kernel] PageFault in application, core dumped.");
+            debug!("[kernel] PageFault in application, core dumped.");
             run_next_app();
         }
         Trap::Exception(Exception::IllegalInstruction) => {
-            println!("[kernel] IllegalInstruction in application, core dumped.");
+            debug!("[kernel] IllegalInstruction in application, core dumped.");
             run_next_app();
         }
         _ => {
