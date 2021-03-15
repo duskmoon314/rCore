@@ -31,8 +31,8 @@ fn clear_bss() {
 
 #[no_mangle]
 pub fn rust_main() -> ! {
-    logger::init();
     clear_bss();
+    logger::init();
     trap::init();
     batch::init();
     batch::run_next_app();

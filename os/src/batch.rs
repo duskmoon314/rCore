@@ -132,7 +132,6 @@ lazy_static! {
 }
 
 pub fn init() {
-    logger::init();
     print_app_info();
 }
 
