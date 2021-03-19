@@ -1,5 +1,13 @@
 {
   "rust-analyzer.cargo.target": "riscv64gc-unknown-none-elf",
   "rust-analyzer.checkOnSave.allTargets": false,
-  "cSpell.words": ["ANSICON"]
+  "rust-analyzer.cargo.features": ["board_qemu"],
+  "cSpell.words": [
+    "ANSICON",
+    "SYSCALL",
+    "riscv",
+    "sepc",
+    "sscratch",
+    "struct"
+  ]
 }

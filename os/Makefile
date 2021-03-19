@@ -50,6 +50,10 @@ kernel:
 clean:
 	@cargo clean
 
+clippy:
+	@cargo fmt
+	@cargo clippy --features "board_$(BOARD)"
+
 disasm: kernel
 	@$(OBJDUMP) $(DISASM) $(KERNEL_ELF) | less
 
