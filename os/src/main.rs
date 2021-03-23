@@ -4,6 +4,12 @@
 #![feature(llvm_asm)]
 #![feature(panic_info_message)]
 #![feature(const_in_array_repeat_expressions)]
+#![feature(alloc_error_handler)]
+
+extern crate alloc;
+
+#[macro_use]
+extern crate bitflags;
 
 #[allow(unused_imports)]
 use console::ANSICON;
@@ -16,6 +22,7 @@ mod config;
 mod lang_items;
 mod loader;
 mod logger;
+mod mm;
 mod sbi;
 mod syscall;
 mod task;
@@ -37,8 +44,12 @@ fn clear_bss() {
 pub fn rust_main() -> ! {
     clear_bss();
     logger::init();
+    debug!("[kernel] Hello, world!");
+    mm::init();
+    debug!("[kernel] back to world!");
+    mm::remap_test();
     trap::init();
-    loader::load_apps();
+    //trap::enable_interrupt();
     trap::enable_timer_interrupt();
     timer::set_next_trigger();
     task::run_first_task();
