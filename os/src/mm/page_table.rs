@@ -1,4 +1,4 @@
-use super::{frame_alloc, FrameTracker, PhysPageNum, StepByOne, VirtAddr, VirtPageNum};
+use super::{frame_alloc, FrameTracker, PhysAddr, PhysPageNum, StepByOne, VirtAddr, VirtPageNum};
 use alloc::vec;
 use alloc::vec::Vec;
 use bitflags::*;
@@ -128,7 +128,25 @@ impl PageTable {
     }
 }
 
-pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&'static [u8]> {
+pub fn translate_writable_va(token: usize, va: usize) -> Result<usize, isize> {
+    let va = VirtAddr::from(va);
+    let vpn = va.floor();
+    let page_table = PageTable::from_token(token);
+    let pte = page_table.translate(vpn).unwrap();
+    if !pte.writable() || !pte.is_valid() {
+        return Err(-1);
+    }
+    let ppn = pte.ppn();
+    let mut pa: PhysAddr = ppn.into();
+    pa |= va.page_offset();
+    Ok(usize::from(pa))
+}
+
+pub fn translated_byte_buffer(
+    token: usize,
+    ptr: *const u8,
+    len: usize,
+) -> Result<Vec<&'static mut [u8]>, isize> {
     let page_table = PageTable::from_token(token);
     let mut start = ptr as usize;
     let end = start + len;
@@ -136,12 +154,20 @@ pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&
     while start < end {
         let start_va = VirtAddr::from(start);
         let mut vpn = start_va.floor();
-        let ppn = page_table.translate(vpn).unwrap().ppn();
+        let pte = page_table.translate(vpn).unwrap();
+        if !pte.readable() || !pte.is_valid() {
+            return Err(-1);
+        }
+        let ppn = pte.ppn();
         vpn.step();
         let mut end_va: VirtAddr = vpn.into();
         end_va = end_va.min(VirtAddr::from(end));
-        v.push(&ppn.get_bytes_array()[start_va.page_offset()..end_va.page_offset()]);
+        if end_va.page_offset() == 0 {
+            v.push(&mut ppn.get_bytes_array()[start_va.page_offset()..]);
+        } else {
+            v.push(&mut ppn.get_bytes_array()[start_va.page_offset()..end_va.page_offset()]);
+        }
         start = end_va.into();
     }
-    v
+    Ok(v)
 }

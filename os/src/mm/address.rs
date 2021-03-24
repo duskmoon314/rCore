@@ -1,6 +1,9 @@
 use super::PageTableEntry;
 use crate::config::{PAGE_SIZE, PAGE_SIZE_BITS};
-use core::fmt::{self, Debug, Formatter};
+use core::{
+    fmt::{self, Debug, Formatter},
+    ops::BitOrAssign,
+};
 
 /// Definitions
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
@@ -122,6 +125,13 @@ impl PhysAddr {
         self.page_offset() == 0
     }
 }
+
+impl BitOrAssign<usize> for PhysAddr {
+    fn bitor_assign(&mut self, rhs: usize) {
+        self.0 |= rhs
+    }
+}
+
 impl From<PhysAddr> for PhysPageNum {
     fn from(v: PhysAddr) -> Self {
         assert_eq!(v.page_offset(), 0);
@@ -170,7 +180,7 @@ impl StepByOne for VirtPageNum {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct SimpleRange<T>
 where
     T: StepByOne + Copy + PartialEq + PartialOrd + Debug,
@@ -191,6 +201,10 @@ where
     }
     pub fn get_end(&self) -> T {
         self.r
+    }
+
+    pub fn is_overlapped(&self, other: &Self) -> bool {
+        (self.l <= other.l && other.l < self.r) || (self.l < other.r && other.r <= self.r)
     }
 }
 impl<T> IntoIterator for SimpleRange<T>

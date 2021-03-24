@@ -92,13 +92,19 @@ impl TaskManager {
             let current = inner.current_task;
             inner.tasks[next].task_status = TaskStatus::Running;
             inner.current_task = next;
+            trace!(
+                "current token {} next {}",
+                inner.tasks[current].get_user_token(),
+                inner.tasks[next].get_user_token()
+            );
             let current_task_cx_ptr2 = inner.tasks[current].get_task_cx_ptr2();
             let next_task_cx_ptr2 = inner.tasks[next].get_task_cx_ptr2();
             core::mem::drop(inner);
             trace!(
-                "current {:?} next {:?}",
+                "current {:?} next {:?} {}",
                 current_task_cx_ptr2,
-                next_task_cx_ptr2
+                next_task_cx_ptr2,
+                next
             );
             unsafe {
                 __switch(current_task_cx_ptr2, next_task_cx_ptr2);
@@ -119,21 +125,16 @@ impl TaskManager {
         }
     }
 
-    #[allow(dead_code)]
-    fn check_read_memory(&self, buf: *const u8, len: usize) -> Result<(), i32> {
-        // let pc = sepc::read();
-        // let upc = sscratch::read();
-        // let max_mem_bound = (pc + APP_SIZE_LIMIT - 1) & (!(APP_SIZE_LIMIT - 1));
-        // let min_mem_bound = max_mem_bound - APP_SIZE_LIMIT;
-        // let max_stack_bound = (upc + USER_STACK_SIZE - 1) & (!(USER_STACK_SIZE - 1));
-        // let min_stack_bound = max_stack_bound - USER_STACK_SIZE;
+    fn mmap(&self, start: usize, len: usize, port: usize) -> Result<isize, isize> {
+        let mut inner = self.inner.borrow_mut();
+        let current = inner.current_task;
+        inner.tasks[current].mmap(start, len, port)
+    }
 
-        // if (min_mem_bound > buf as usize || max_mem_bound < buf as usize + len)
-        //     && (min_stack_bound > buf as usize || max_stack_bound < buf as usize + len)
-        // {
-        //     return Err(-1);
-        // }
-        Ok(())
+    fn munmap(&self, start: usize, len: usize) -> Result<isize, isize> {
+        let mut inner = self.inner.borrow_mut();
+        let current = inner.current_task;
+        inner.tasks[current].munmap(start, len)
     }
 }
 
@@ -167,13 +168,18 @@ pub fn set_current_priority(priority: isize) -> Result<isize, isize> {
     TASK_MANAGER.set_current_priority(priority)
 }
 
-pub fn check_read_memory(buf: *const u8, len: usize) -> Result<(), i32> {
-    TASK_MANAGER.check_read_memory(buf, len)
-}
 pub fn current_user_token() -> usize {
     TASK_MANAGER.get_current_token()
 }
 
 pub fn current_trap_cx() -> &'static mut TrapContext {
     TASK_MANAGER.get_current_trap_cx()
+}
+
+pub fn mmap(start: usize, len: usize, port: usize) -> Result<isize, isize> {
+    TASK_MANAGER.mmap(start, len, port)
+}
+
+pub fn munmap(start: usize, len: usize) -> Result<isize, isize> {
+    TASK_MANAGER.munmap(start, len)
 }

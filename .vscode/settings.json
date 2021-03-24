@@ -5,9 +5,13 @@
   "cSpell.words": [
     "ANSICON",
     "SYSCALL",
+    "bitflags",
+    "mmap",
+    "munmap",
     "riscv",
     "sepc",
     "sscratch",
-    "struct"
+    "struct",
+    "unmap"
   ]
 }

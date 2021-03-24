@@ -213,6 +213,80 @@ impl MemorySet {
     pub fn translate(&self, vpn: VirtPageNum) -> Option<PageTableEntry> {
         self.page_table.translate(vpn)
     }
+
+    fn is_mapped_area(&self, start_va: VirtAddr, end_va: VirtAddr) -> bool {
+        for area in &self.areas {
+            if area
+                .vpn_range
+                .is_overlapped(&VPNRange::new(start_va.into(), end_va.into()))
+            {
+                return true;
+            }
+        }
+        false
+    }
+
+    pub fn mmap(&mut self, start: usize, len: usize, port: usize) -> Result<isize, isize> {
+        if port & !7 != 0 || port & 7 == 0 || len > 1 << 30 {
+            Err(-1)
+        } else {
+            let start_va: VirtAddr = VirtAddr::from(start);
+            if start_va != start_va.floor().into() {
+                return Err(-1);
+            }
+            let end_va: VirtAddr = VirtAddr::from(start + len).ceil().into();
+
+            if self.is_mapped_area(start_va, end_va) {
+                return Err(-1);
+            }
+            self.insert_framed_area(
+                start_va,
+                end_va,
+                MapPermission::from_bits((port << 1 | 0b10000) as u8).unwrap(),
+            );
+
+            Ok((usize::from(end_va) - usize::from(start_va)) as isize)
+        }
+    }
+
+    pub fn munmap(&mut self, start: usize, len: usize) -> Result<isize, isize> {
+        let mut start_va: VirtAddr = VirtAddr::from(start);
+        if start_va != start_va.floor().into() {
+            return Err(-1);
+        }
+        let end_va: VirtAddr = VirtAddr::from(start + len).ceil().into();
+
+        let mut to_unmap: Vec<usize> = Vec::new();
+
+        for (i, area) in self.areas.iter().enumerate() {
+            if area
+                .vpn_range
+                .is_overlapped(&VPNRange::new(start_va.into(), end_va.into()))
+            {
+                to_unmap.push(i);
+            }
+        }
+
+        to_unmap.sort_by_key(|i| self.areas[*i].vpn_range.get_start());
+
+        for i in &to_unmap {
+            if start_va == self.areas[*i].vpn_range.get_start().into() {
+                start_va = self.areas[*i].vpn_range.get_end().into();
+            } else {
+                return Err(-1);
+            }
+        }
+        if start_va != end_va {
+            return Err(-1);
+        }
+
+        for i in to_unmap {
+            self.areas[i].unmap(&mut self.page_table);
+            self.areas.remove(i);
+        }
+
+        Ok(len as isize)
+    }
 }
 
 pub struct MapArea {
@@ -248,6 +322,7 @@ impl MapArea {
                 let frame = frame_alloc().unwrap();
                 ppn = frame.ppn;
                 self.data_frames.insert(vpn, frame);
+                trace!("map_one: vpn {:?} ppn {:?}", vpn, ppn);
             }
         }
         let pte_flags = PTEFlags::from_bits(self.map_perm.bits).unwrap();

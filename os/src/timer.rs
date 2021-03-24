@@ -1,5 +1,6 @@
 use crate::config::CLOCK_FREQ;
 use crate::sbi::set_timer;
+use alloc::vec::Vec;
 use riscv::register::time;
 
 const TICKS_PER_SEC: usize = 100;
@@ -20,11 +21,14 @@ impl TimeVal {
 }
 
 #[allow(unused_variables)]
-pub fn get_time(ts: &mut TimeVal, tz: usize) -> isize {
+pub fn get_time(mut ts: Vec<*mut usize>, tz: usize) -> isize {
     let t = time::read();
-    ts.sec = t / CLOCK_FREQ;
-    ts.usec = (t % CLOCK_FREQ) * 1000000 / CLOCK_FREQ;
-    trace!("t {} sec {} usec {}", t, ts.sec, ts.usec);
+    unsafe {
+        *ts[0] = t / CLOCK_FREQ;
+        *ts[1] = (t % CLOCK_FREQ) * 1000000 / CLOCK_FREQ;
+        trace!("t {} sec {} usec {}", t, *ts[0], *ts[1]);
+    }
+
     0
 }
 
