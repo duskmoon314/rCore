@@ -280,6 +280,8 @@ impl MemorySet {
             return Err(-1);
         }
 
+        to_unmap.sort_by(|l, r| r.cmp(l));
+
         for i in to_unmap {
             self.areas[i].unmap(&mut self.page_table);
             self.areas.remove(i);
