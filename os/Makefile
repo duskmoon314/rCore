@@ -67,6 +67,8 @@ run: tools run-inner
 tools:
 	(which $(K210-BURNER)) || (cd .. && git clone https://github.com/sipeed/kflash.py.git && mv kflash.py tools)
 
+	
+
 run-inner: build
 ifeq ($(BOARD),qemu)
 	@qemu-system-riscv64 \
