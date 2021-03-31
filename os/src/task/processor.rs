@@ -1,10 +1,10 @@
 use super::TaskControlBlock;
+use super::__switch;
+use super::{fetch_task, TaskStatus};
+use crate::trap::TrapContext;
 use alloc::sync::Arc;
 use core::cell::RefCell;
 use lazy_static::*;
-use super::{fetch_task, TaskStatus};
-use super::__switch;
-use crate::trap::TrapContext;
 
 pub struct Processor {
     inner: RefCell<ProcessorInner>,
@@ -42,10 +42,7 @@ impl Processor {
                 // release
                 self.inner.borrow_mut().current = Some(task);
                 unsafe {
-                    __switch(
-                        idle_task_cx_ptr2,
-                        next_task_cx_ptr2,
-                    );
+                    __switch(idle_task_cx_ptr2, next_task_cx_ptr2);
                 }
             }
         }
@@ -54,7 +51,11 @@ impl Processor {
         self.inner.borrow_mut().current.take()
     }
     pub fn current(&self) -> Option<Arc<TaskControlBlock>> {
-        self.inner.borrow().current.as_ref().map(|task| Arc::clone(task))
+        self.inner
+            .borrow()
+            .current
+            .as_ref()
+            .map(|task| Arc::clone(task))
     }
 }
 
@@ -87,9 +88,33 @@ pub fn current_trap_cx() -> &'static mut TrapContext {
 pub fn schedule(switched_task_cx_ptr2: *const usize) {
     let idle_task_cx_ptr2 = PROCESSOR.get_idle_task_cx_ptr2();
     unsafe {
-        __switch(
-            switched_task_cx_ptr2,
-            idle_task_cx_ptr2,
-        );
+        __switch(switched_task_cx_ptr2, idle_task_cx_ptr2);
+    }
+}
+
+pub fn set_current_priority(priority: isize) -> Result<isize, isize> {
+    if let Some(current) = current_task() {
+        let mut current = current.acquire_inner_lock();
+        current.set_priority(priority)
+    } else {
+        Err(-1)
+    }
+}
+
+pub fn mmap(start: usize, len: usize, port: usize) -> Result<isize, isize> {
+    if let Some(current) = current_task() {
+        let mut current = current.acquire_inner_lock();
+        current.mmap(start, len, port)
+    } else {
+        Err(-1)
+    }
+}
+
+pub fn munmap(start: usize, len: usize) -> Result<isize, isize> {
+    if let Some(current) = current_task() {
+        let mut current = current.acquire_inner_lock();
+        current.munmap(start, len)
+    } else {
+        Err(-1)
     }
 }

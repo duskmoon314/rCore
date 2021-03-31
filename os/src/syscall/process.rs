@@ -1,12 +1,13 @@
 use core::mem::size_of;
 
 use crate::loader::get_app_data_by_name;
-use crate::mm::{translated_refmut, translated_str};
+use crate::mm::{translate_writable_va, translated_refmut, translated_str};
 use crate::task::{
-    add_task, current_task, current_user_token, exit_current_and_run_next,
-    suspend_current_and_run_next,
+    add_task, current_task, current_user_token, exit_current_and_run_next, mmap, munmap,
+    set_current_priority, suspend_current_and_run_next,
 };
-use crate::timer::get_time_ms;
+
+use crate::timer::get_time;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
@@ -42,17 +43,11 @@ pub fn sys_get_time(time: usize, tz: usize) -> isize {
 }
 
 pub fn sys_mmap(start: usize, len: usize, port: usize) -> isize {
-    match mmap(start, len, port) {
-        Ok(map_size) => map_size,
-        Err(_) => -1,
-    }
+    mmap(start, len, port).unwrap_or(-1)
 }
 
 pub fn sys_munmap(start: usize, len: usize) -> isize {
-    match munmap(start, len) {
-        Ok(len) => len,
-        Err(_) => -1,
-    }
+    munmap(start, len).unwrap_or(-1)
 }
 
 pub fn sys_getpid() -> isize {
@@ -60,6 +55,7 @@ pub fn sys_getpid() -> isize {
 }
 
 pub fn sys_fork() -> isize {
+    debug!("Fork start");
     let current_task = current_task().unwrap();
     let new_task = current_task.fork();
     let new_pid = new_task.pid.0;
@@ -70,12 +66,14 @@ pub fn sys_fork() -> isize {
     trap_cx.x[10] = 0;
     // add new task to scheduler
     add_task(new_task);
+    debug!("new_task {:?}", new_pid);
     new_pid as isize
 }
 
 pub fn sys_exec(path: *const u8) -> isize {
     let token = current_user_token();
     let path = translated_str(token, path);
+    debug!("EXEC {}", &path);
     if let Some(data) = get_app_data_by_name(path.as_str()) {
         let task = current_task().unwrap();
         task.exec(data);
@@ -121,4 +119,20 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
         -2
     }
     // ---- release current PCB lock automatically
+}
+
+pub fn sys_spawn(file: *const u8) -> isize {
+    debug!("SPAWN start");
+    let current_task = current_task().unwrap();
+    match current_task.spawn(file) {
+        Ok(new_task) => {
+            let new_pid = new_task.pid.0;
+            let trap_cx = new_task.acquire_inner_lock().get_trap_cx();
+            trap_cx.x[10] = 0;
+            add_task(new_task);
+            debug!("new_task via spawn {:?}", new_pid);
+            new_pid as isize
+        }
+        Err(_) => -1,
+    }
 }

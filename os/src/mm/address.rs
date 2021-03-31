@@ -209,7 +209,9 @@ where
     }
 
     pub fn is_overlapped(&self, other: &Self) -> bool {
-        (self.l <= other.l && other.l < self.r) || (self.l < other.r && other.r <= self.r)
+        (self.l <= other.l && other.l < self.r)
+            || (self.l < other.r && other.r <= self.r)
+            || (other.l < self.l && self.r < other.r)
     }
 }
 impl<T> IntoIterator for SimpleRange<T>

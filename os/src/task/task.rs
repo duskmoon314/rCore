@@ -1,8 +1,8 @@
 use super::TaskContext;
 use super::{pid_alloc, KernelStack, PidHandle};
-use crate::config::TRAP_CONTEXT;
 use crate::mm::{MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
 use crate::trap::{trap_handler, TrapContext};
+use crate::{config::TRAP_CONTEXT, loader::get_app_data_by_name, mm::translated_str};
 use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
 use spin::{Mutex, MutexGuard};
@@ -42,6 +42,22 @@ impl TaskControlBlockInner {
     }
     pub fn is_zombie(&self) -> bool {
         self.get_status() == TaskStatus::Zombie
+    }
+
+    pub fn set_priority(&mut self, priority: isize) -> Result<isize, isize> {
+        if priority < 2 {
+            return Err(-1);
+        }
+        self.priority = priority;
+        Ok(priority)
+    }
+
+    pub fn mmap(&mut self, start: usize, len: usize, port: usize) -> Result<isize, isize> {
+        self.memory_set.mmap(start, len, port)
+    }
+
+    pub fn munmap(&mut self, start: usize, len: usize) -> Result<isize, isize> {
+        self.memory_set.munmap(start, len)
     }
 }
 
@@ -89,13 +105,6 @@ impl TaskControlBlock {
         task_control_block
     }
 
-    pub fn mmap(&mut self, start: usize, len: usize, port: usize) -> Result<isize, isize> {
-        self.memory_set.mmap(start, len, port)
-    }
-
-    pub fn munmap(&mut self, start: usize, len: usize) -> Result<isize, isize> {
-        self.memory_set.munmap(start, len)
-    }
     pub fn exec(&self, elf_data: &[u8]) {
         // memory_set with elf program headers/trampoline/trap context/user stack
         let (memory_set, user_sp, entry_point) = MemorySet::from_elf(elf_data);
@@ -164,6 +173,57 @@ impl TaskControlBlock {
     }
     pub fn getpid(&self) -> usize {
         self.pid.0
+    }
+
+    pub fn spawn(
+        self: &Arc<TaskControlBlock>,
+        file: *const u8,
+    ) -> Result<Arc<TaskControlBlock>, isize> {
+        let mut parent_inner = self.acquire_inner_lock();
+        let parent_token = parent_inner.get_user_token();
+        let f = translated_str(parent_token, file);
+        debug!("SPAWN exec {}", &f);
+
+        if let Some(elf_data) = get_app_data_by_name(f.as_str()) {
+            let (memory_set, user_sp, entry_point) = MemorySet::from_elf(elf_data);
+            let trap_cx_ppn = memory_set
+                .translate(VirtAddr::from(TRAP_CONTEXT).into())
+                .unwrap()
+                .ppn();
+
+            let pid_handle = pid_alloc();
+            let kernel_stack = KernelStack::new(&pid_handle);
+            let kernel_stack_top = kernel_stack.get_top();
+            let task_cx_ptr = kernel_stack.push_on_top(TaskContext::goto_trap_return());
+
+            let task_control_block = Arc::new(TaskControlBlock {
+                pid: pid_handle,
+                kernel_stack,
+                inner: Mutex::new(TaskControlBlockInner {
+                    trap_cx_ppn,
+                    base_size: user_sp,
+                    task_cx_ptr: task_cx_ptr as usize,
+                    task_status: TaskStatus::Ready,
+                    memory_set,
+                    parent: Some(Arc::downgrade(self)),
+                    children: Vec::new(),
+                    exit_code: 0,
+                    priority: 16,
+                }),
+            });
+
+            parent_inner.children.push(task_control_block.clone());
+            let trap_cx = task_control_block.acquire_inner_lock().get_trap_cx();
+            *trap_cx = TrapContext::app_init_context(
+                entry_point,
+                user_sp,
+                KERNEL_SPACE.lock().token(),
+                kernel_stack_top,
+                trap_handler as usize,
+            );
+            return Ok(task_control_block);
+        }
+        Err(-1)
     }
 }
 

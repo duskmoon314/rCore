@@ -373,11 +373,8 @@ impl MapArea {
         page_table.map(vpn, ppn, pte_flags);
     }
     pub fn unmap_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
-        match self.map_type {
-            MapType::Framed => {
-                self.data_frames.remove(&vpn);
-            }
-            _ => {}
+        if let MapType::Framed = self.map_type {
+            self.data_frames.remove(&vpn);
         }
         page_table.unmap(vpn);
     }
