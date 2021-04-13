@@ -1,6 +1,6 @@
 use super::TaskContext;
 use super::{pid_alloc, KernelStack, PidHandle};
-use crate::fs::{File, Stdin, Stdout};
+use crate::fs::{File, MailBox, Socket, Stdin, Stdout};
 use crate::mm::{MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
 use crate::trap::{trap_handler, TrapContext};
 use crate::{config::TRAP_CONTEXT, loader::get_app_data_by_name, mm::translated_str};
@@ -28,6 +28,7 @@ pub struct TaskControlBlockInner {
     pub children: Vec<Arc<TaskControlBlock>>,
     pub exit_code: i32,
     pub fd_table: Vec<Option<Arc<dyn File + Send + Sync>>>,
+    pub mail_box: Arc<MailBox>,
 }
 
 impl TaskControlBlockInner {
@@ -71,6 +72,14 @@ impl TaskControlBlockInner {
             self.fd_table.len() - 1
         }
     }
+
+    pub fn is_mailbox_full(&self) -> bool {
+        self.mail_box.is_full()
+    }
+
+    pub fn is_mailbox_empty(&self) -> bool {
+        self.mail_box.is_empty()
+    }
 }
 
 impl TaskControlBlock {
@@ -111,6 +120,7 @@ impl TaskControlBlock {
                     // 2 -> stderr
                     Some(Arc::new(Stdout)),
                 ],
+                mail_box: Arc::new(MailBox::new()),
             }),
         };
         // prepare TrapContext in user space
@@ -188,6 +198,7 @@ impl TaskControlBlock {
                 exit_code: 0,
                 priority: 16,
                 fd_table: new_fd_table,
+                mail_box: Arc::new(MailBox::new()),
             }),
         });
         // add child
@@ -247,6 +258,7 @@ impl TaskControlBlock {
                         // 2 -> stderr
                         Some(Arc::new(Stdout)),
                     ],
+                    mail_box: Arc::new(MailBox::new()),
                 }),
             });
 
@@ -262,6 +274,10 @@ impl TaskControlBlock {
             return Ok(task_control_block);
         }
         Err(-1)
+    }
+
+    pub fn create_socket(&self) -> Arc<Socket> {
+        self.inner.lock().mail_box.create_socket()
     }
 }
 

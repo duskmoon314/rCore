@@ -163,7 +163,11 @@ pub fn translated_byte_buffer(
     while start < end {
         let start_va = VirtAddr::from(start);
         let mut vpn = start_va.floor();
-        let pte = page_table.translate(vpn).unwrap();
+        let pte = page_table.translate(vpn);
+        if pte.is_none() {
+            return Err(-1);
+        }
+        let pte = pte.unwrap();
         if !pte.readable() || !pte.is_valid() {
             return Err(-1);
         }

@@ -48,6 +48,12 @@ impl Drop for PidHandle {
     }
 }
 
+impl PartialEq<usize> for PidHandle {
+    fn eq(&self, other: &usize) -> bool {
+        self.0 == *other
+    }
+}
+
 pub fn pid_alloc() -> PidHandle {
     PID_ALLOCATOR.lock().alloc()
 }
