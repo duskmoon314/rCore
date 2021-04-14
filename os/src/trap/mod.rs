@@ -84,6 +84,7 @@ pub fn trap_handler() -> ! {
             );
         }
     }
+    //println!("before trap_return");
     trap_return();
 }
 

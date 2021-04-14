@@ -48,6 +48,14 @@ impl MailBox {
 }
 
 impl File for MailBox {
+    fn readable(&self) -> bool {
+        true
+    }
+
+    fn writable(&self) -> bool {
+        false
+    }
+
     fn read(&self, buf: UserBuffer) -> Result<usize, isize> {
         let mut inner = self.inner.lock();
         match inner.mails.front() {
@@ -111,6 +119,14 @@ impl Socket {
 }
 
 impl File for Socket {
+    fn readable(&self) -> bool {
+        false
+    }
+
+    fn writable(&self) -> bool {
+        self.writable
+    }
+
     fn read(&self, _buf: UserBuffer) -> Result<usize, isize> {
         Err(-1)
     }

@@ -7,5 +7,9 @@ os/Cargo.lock
 user/target/*
 user/.idea/*
 user/Cargo.lock
+easy-fs/Cargo.lock
+easy-fs/target/*
+easy-fs-fuse/Cargo.lock
+easy-fs-fuse/target/*
 tools/
 *.patch
