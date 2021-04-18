@@ -13,6 +13,7 @@ pub trait File: Send + Sync {
     fn writable(&self) -> bool;
     fn read(&self, buf: UserBuffer) -> Result<usize, isize>;
     fn write(&self, buf: UserBuffer) -> Result<usize, isize>;
+    fn stat(&self, st: &mut Stat) -> Result<usize, isize>;
 }
 
-pub use inode::{list_apps, open_file, OSInode, OpenFlags};
+pub use inode::{link_at, list_apps, open_file, unlink_at, OSInode, OpenFlags, Stat};

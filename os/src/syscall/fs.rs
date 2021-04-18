@@ -1,6 +1,6 @@
 use core::cmp::min;
 
-use crate::fs::{make_pipe, open_file, File, OpenFlags};
+use crate::fs::{link_at, make_pipe, open_file, unlink_at, File, OpenFlags, Stat};
 use crate::mm::{translated_byte_buffer, translated_refmut, translated_str, UserBuffer};
 use crate::task::{current_task, current_user_token, find_task};
 use alloc::sync::Arc;
@@ -48,7 +48,10 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> isize {
         drop(inner);
         if let Ok(buffers) = translated_byte_buffer(token, buf, len) {
             match file.read(UserBuffer::new(buffers)) {
-                Ok(read_len) => read_len as isize,
+                Ok(read_len) => {
+                    debug!("read_len: {}", read_len);
+                    read_len as isize
+                }
                 Err(_) => -1,
             }
         } else {
@@ -59,11 +62,15 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> isize {
     }
 }
 
-pub fn sys_open(path: *const u8, flags: u32) -> isize {
+pub fn sys_open(_dirfd: usize, path: *const u8, flags: u32, mode: u32) -> isize {
     let task = current_task().unwrap();
     let token = current_user_token();
     let path = translated_str(token, path);
-    if let Some(inode) = open_file(path.as_str(), OpenFlags::from_bits(flags).unwrap()) {
+    if let Some(inode) = open_file(
+        path.as_str(),
+        OpenFlags::from_bits(flags).unwrap(),
+        OpenFlags::from_bits(mode).unwrap(),
+    ) {
         let mut inner = task.acquire_inner_lock();
         let fd = inner.alloc_fd();
         inner.fd_table[fd] = Some(inode);
@@ -113,11 +120,11 @@ pub fn sys_mailwrite(pid: usize, buf: *mut u8, len: usize) -> isize {
         if let Ok(buffers) = translated_byte_buffer(token, buf, min(len, 256)) {
             let socket = receive_task.create_socket();
             match socket.write(UserBuffer::new(buffers)) {
-                Ok(write_len) => return write_len as isize,
-                Err(_) => return -1,
+                Ok(write_len) => write_len as isize,
+                Err(_) => -1,
             }
         } else {
-            return -1;
+            -1
         }
     } else {
         debug!("not find task");
@@ -163,4 +170,38 @@ pub fn sys_dup(fd: usize) -> isize {
     let new_fd = inner.alloc_fd();
     inner.fd_table[new_fd] = Some(Arc::clone(inner.fd_table[fd].as_ref().unwrap()));
     new_fd as isize
+}
+
+pub fn sys_link_at(
+    _old_dir_fd: i32,
+    old_path: *const u8,
+    _new_dir_fd: i32,
+    new_path: *const u8,
+    _flags: u32,
+) -> isize {
+    let token = current_user_token();
+    let old_name = translated_str(token, old_path);
+    let new_name = translated_str(token, new_path);
+    link_at(&old_name, &new_name).unwrap() as isize
+}
+
+pub fn sys_unlink_at(_dir_fd: i32, path: *const u8, _flags: u32) -> isize {
+    let token = current_user_token();
+    let name = translated_str(token, path);
+    unlink_at(&name).unwrap() as isize
+}
+
+pub fn sys_fstat(fd: i32, st: usize) -> isize {
+    let task = current_task().unwrap();
+    let token = current_user_token();
+    let stat = translated_refmut(token, st as *mut Stat);
+    let inner = task.acquire_inner_lock();
+    if let Some(file) = &inner.fd_table[fd as usize] {
+        match file.stat(stat) {
+            Ok(_) => 0,
+            Err(_) => -1,
+        }
+    } else {
+        -1
+    }
 }

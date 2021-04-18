@@ -262,7 +262,7 @@ impl TaskControlBlock {
         //     argc as isize
         // }
 
-        if let Some(app_inode) = open_file(f.as_str(), OpenFlags::RDONLY) {
+        if let Some(app_inode) = open_file(f.as_str(), OpenFlags::RDONLY, OpenFlags::RDONLY) {
             let elf_data = app_inode.read_all();
             let (memory_set, user_sp, entry_point) = MemorySet::from_elf(elf_data.as_slice());
             let trap_cx_ppn = memory_set

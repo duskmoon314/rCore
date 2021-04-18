@@ -7,7 +7,7 @@ use spin::Mutex;
 use crate::mm::UserBuffer;
 use crate::task::suspend_current_and_run_next;
 
-use super::File;
+use super::{File, Stat};
 
 const MAIL_BUFFER_SIZE: usize = 256;
 const MAILBOX_SIZE: usize = 16;
@@ -102,6 +102,11 @@ impl File for MailBox {
     fn write(&self, _buf: UserBuffer) -> Result<usize, isize> {
         Err(-1)
     }
+
+    fn stat(&self, st: &mut Stat) -> Result<usize, isize> {
+        *st = Stat::new();
+        Ok(0)
+    }
 }
 
 pub struct Socket {
@@ -157,6 +162,11 @@ impl File for Socket {
 
             return Ok(write_size);
         }
+    }
+
+    fn stat(&self, st: &mut Stat) -> Result<usize, isize> {
+        *st = Stat::new();
+        Ok(0)
     }
 }
 

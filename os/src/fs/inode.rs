@@ -4,9 +4,46 @@ use crate::mm::UserBuffer;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use bitflags::*;
-use easy_fs::{EasyFileSystem, Inode};
+use easy_fs::{DiskInodeType, EasyFileSystem, Inode};
 use lazy_static::*;
 use spin::Mutex;
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct Stat {
+    /// ID of device containing file
+    pub dev: u64,
+    /// inode number
+    pub ino: u64,
+    /// file type and mode
+    pub mode: StatMode,
+    /// number of hard links
+    pub nlink: u32,
+    /// unused pad
+    pad: [u64; 7],
+}
+
+impl Stat {
+    pub fn new() -> Self {
+        Stat {
+            dev: 0,
+            ino: 0,
+            mode: StatMode::NULL,
+            nlink: 0,
+            pad: [0; 7],
+        }
+    }
+}
+
+bitflags! {
+    pub struct StatMode: u32 {
+        const NULL  = 0;
+        /// directory
+        const DIR   = 0o040000;
+        /// ordinary regular file
+        const FILE  = 0o100000;
+    }
+}
 
 pub struct OSInode {
     readable: bool,
@@ -75,25 +112,33 @@ impl OpenFlags {
         if self.is_empty() {
             (true, false)
         } else if self.contains(Self::WRONLY) {
-            (false, true)
+            if self.contains(Self::RDWR) {
+                (false, false)
+            } else {
+                (false, true)
+            }
         } else {
             (true, true)
         }
     }
 }
 
-pub fn open_file(name: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
+pub fn open_file(name: &str, flags: OpenFlags, mode: OpenFlags) -> Option<Arc<OSInode>> {
     let (readable, writable) = flags.read_write();
+    if !readable && !writable {
+        return None;
+    }
     if flags.contains(OpenFlags::CREATE) {
         if let Some(inode) = ROOT_INODE.find(name) {
             // clear size
-            inode.clear();
+            // inode.clear();
             Some(Arc::new(OSInode::new(readable, writable, inode)))
         } else {
             // create file
+            let (read_mode, write_mode) = mode.read_write();
             ROOT_INODE
                 .create(name)
-                .map(|inode| Arc::new(OSInode::new(readable, writable, inode)))
+                .map(|inode| Arc::new(OSInode::new(read_mode, write_mode, inode)))
         }
     } else {
         ROOT_INODE.find(name).map(|inode| {
@@ -103,6 +148,17 @@ pub fn open_file(name: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
             Arc::new(OSInode::new(readable, writable, inode))
         })
     }
+}
+
+pub fn link_at(old_name: &str, new_name: &str) -> Result<usize, isize> {
+    match ROOT_INODE.link_at(old_name, new_name) {
+        Some(_) => Ok(0),
+        None => Err(-1),
+    }
+}
+
+pub fn unlink_at(name: &str) -> Result<usize, isize> {
+    ROOT_INODE.unlink_at(name)
 }
 
 impl File for OSInode {
@@ -135,5 +191,19 @@ impl File for OSInode {
             total_write_size += write_size;
         }
         Ok(total_write_size)
+    }
+    fn stat(&self, st: &mut Stat) -> Result<usize, isize> {
+        let inner = self.inner.lock();
+        *st = Stat {
+            dev: inner.inode.get_block_device() as u64,
+            ino: inner.inode.get_block_id() as u64,
+            mode: match inner.inode.get_inode_mode() {
+                DiskInodeType::File => StatMode::FILE,
+                DiskInodeType::Directory => StatMode::DIR,
+            },
+            nlink: inner.inode.get_nlink(),
+            pad: [0; 7],
+        };
+        Ok(0)
     }
 }

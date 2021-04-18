@@ -4,7 +4,8 @@ MODE := release
 KERNEL_ELF := target/$(TARGET)/$(MODE)/os
 KERNEL_BIN := $(KERNEL_ELF).bin
 DISASM_TMP := target/$(TARGET)/$(MODE)/asm
-FS_IMG := ../user/target/$(TARGET)/$(MODE)/fs.img
+# FS_IMG := ../user/target/$(TARGET)/$(MODE)/fs.img
+FS_IMG := ../../rCore_tutorial_tests/user/build/elf/fs.img
 SDCARD := /dev/sdb
 APPS := ../user/src/bin/*
 
@@ -49,8 +50,11 @@ $(KERNEL_BIN): kernel
 	@$(OBJCOPY) $(KERNEL_ELF) --strip-all -O binary $@
 
 $(FS_IMG): $(APPS)
-	@cd ../user && make build
-	@cd ../easy-fs-fuse && cargo run --release -- -s ../user/src/bin/ -t ../user/target/riscv64gc-unknown-none-elf/release/
+	@rm -f $(FS_IMG)
+	# @cd ../user && make build
+	# @cd ../easy-fs-fuse && cargo run --release -- -s ../user/src/bin/ -t ../user/target/riscv64gc-unknown-none-elf/release/
+	@cd ../../rCore_tutorial_tests/user && make all CHAPTER=7
+	@cd ../easy-fs-fuse && cargo run --release -- -s ../../rCore_tutorial_tests/user/src/bin/ -t ../../rCore_tutorial_tests/user/build/elf/
 
 $(APPS):
 
@@ -62,6 +66,7 @@ kernel:
 
 clean:
 	@cargo clean
+	@rm $(FS_IMG)
 
 clippy:
 	@cargo fmt
@@ -111,4 +116,4 @@ debug: build
 		tmux split-window -h "riscv64-unknown-elf-gdb -ex 'file $(KERNEL_ELF)' -ex 'set arch riscv:rv64' -ex 'target remote localhost:1234'" && \
 		tmux -2 attach-session -d
 
-.PHONY: build env kernel clean disasm disasm-vim run-inner
+.PHONY: build env kernel clean disasm disasm-vim run-inner $(FS_IMG)

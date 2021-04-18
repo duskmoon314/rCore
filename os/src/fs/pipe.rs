@@ -1,4 +1,4 @@
-use super::File;
+use super::{File, Stat};
 use crate::mm::UserBuffer;
 use crate::task::suspend_current_and_run_next;
 use alloc::sync::{Arc, Weak};
@@ -163,5 +163,10 @@ impl File for Pipe {
                 }
             }
         }
+    }
+
+    fn stat(&self, st: &mut Stat) -> Result<usize, isize> {
+        *st = Stat::new();
+        Ok(0)
     }
 }
